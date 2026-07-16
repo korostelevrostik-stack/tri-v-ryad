@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>🍎 Три в ряд</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;user-select:none}
+        html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;touch-action:none;font-family:'Segoe UI',sans-serif}
+        body{display:flex;justify-content:center;align-items:center}
+        .game{width:100%;height:100%;max-width:500px;max-height:900px;background:linear-gradient(145deg,#1a2a3a,#0f1a2a);padding:10px;display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
+        .header{color:#ffd700;font-size:clamp(16px,4vw,24px);font-weight:700;text-align:center;padding:4px 0;flex-shrink:0}
+        .header .sub{font-size:clamp(8px,2vw,12px);color:#6a8a8a;display:block}
+        .stats{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;background:rgba(15,26,42,0.5);padding:6px 8px;border-radius:12px;margin-bottom:6px;flex-shrink:0}
+        .stat-item{color:#c0d0e8;font-weight:700;font-size:clamp(7px,1.5vw,10px);text-align:center}
+        .stat-item span{color:#ffd700;font-size:clamp(12px,3vw,18px);display:block}
+        .grid-wrap{flex:1;min-height:0;width:100%;aspect-ratio:1/1;margin:4px auto;border-radius:16px;overflow:hidden;background:rgba(10,20,30,0.6);border:2px solid rgba(255,215,0,0.08);position:relative;touch-action:none}
+        .grid{display:grid;gap:4px;padding:6px;width:100%;height:100%;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);touch-action:none}
+        .cell{background:rgba(30,50,70,0.4);border-radius:6px;display:flex;justify-content:center;align-items:center;font-size:clamp(18px,5vw,28px);cursor:pointer;transition:all .15s;border:1px solid rgba(255,255,255,0.05);touch-action:none;aspect-ratio:1}
+        .cell:active{transform:scale(.9)}
+        .cell.selected{border-color:#ffd700;box-shadow:0 0 30px rgba(255,215,0,0.2);transform:scale(1.05);z-index:2}
+        .cell.dragging{opacity:0.6;transform:scale(0.9);z-index:10}
+        .cell.bonus-rocket{background:rgba(255,100,100,0.2);border-color:#ff6b6b}
+        .cell.bonus-bomb{background:rgba(255,215,0,0.2);border-color:#ffd700}
+        .cell.bonus-rainbow{background:rgba(200,100,255,0.2);border-color:#c46fcf}
+        .cell.bonus-double{background:rgba(100,200,255,0.2);border-color:#6fcfcf}
+        .cell.obstacle-ice{border-color:#6fcfcf}
+        .cell.obstacle-box{border-color:#cf8f6f}
+        .cell.obstacle-vine{border-color:#6fcf6f}
+        .cell.obstacle-crystal{border-color:#6f6fcf}
+        .cell.obstacle-lock{border-color:#cf6f6f}
+        .btn-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:6px 0;flex-shrink:0}
+        .btn{background:rgba(15,26,42,0.6);color:#c0d0e8;border:1px solid rgba(255,215,0,0.1);padding:clamp(6px,1.5vw,10px);border-radius:12px;font-size:clamp(8px,1.8vw,12px);font-weight:700;cursor:pointer;transition:all .2s;text-align:center}
+        .btn:active{transform:scale(.95)}
+        .btn.gold{border-color:rgba(255,215,0,0.3);color:#ffd700}
+        .btn.red{border-color:rgba(170,90,90,0.3);color:#f0d0d0}
+        .btn.blue{border-color:rgba(74,106,154,0.3);color:#6a9aca}
+        .btn.purple{border-color:rgba(154,106,202,0.3);color:#c46fcf}
+        .footer{color:#4a6a6a;text-align:center;font-size:clamp(6px,1.4vw,9px);margin-top:4px;flex-shrink:0}
+        .toast{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.9);color:#ffd700;padding:6px 18px;border-radius:14px;font-size:clamp(10px,2.5vw,16px);font-weight:700;z-index:999;border:1px solid rgba(255,215,0,0.2);opacity:0;transition:opacity .3s;pointer-events:none}
+        .toast.show{opacity:1}
+        .toast.error{border-color:rgba(255,100,100,0.3);color:#ff6b6b}
+        .game-over{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);border-radius:14px;display:none;flex-direction:column;justify-content:center;align-items:center;z-index:10;padding:16px}
+        .game-over.active{display:flex}
+        .game-over .go-text{color:#ff6b6b;font-size:clamp(24px,6vw,40px);font-weight:700;text-align:center}
+        .game-over .go-text.win{color:#ffd700}
+        .game-over .go-score{color:#c0d0e8;font-size:clamp(12px,3vw,18px);margin:3px 0;text-align:center}
+        .game-over .go-btn{background:#3a8a3a;color:#f0f7d0;border:none;padding:clamp(8px,2vw,14px) clamp(20px,5vw,40px);border-radius:14px;font-size:clamp(12px,3vw,18px);font-weight:700;cursor:pointer;margin-top:6px}
+        .game-over .go-btn:active{transform:scale(.95)}
+        .auth-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.92);z-index:2000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+        .auth-overlay.hidden{display:none}
+        .auth-box{background:linear-gradient(145deg,#1a2a3a,#0f1a2a);padding:25px 20px;border-radius:25px;border:1px solid rgba(255,215,0,0.1);max-width:360px;width:100%;max-height:90vh;overflow-y:auto}
+        .auth-box h2{color:#ffd700;text-align:center;font-size:clamp(18px,4vw,26px);margin-bottom:16px}
+        .auth-box .auth-label{color:#c0d0e8;font-size:clamp(10px,2vw,13px);font-weight:700;margin:6px 0 3px 0;opacity:0.7}
+        .auth-box input{width:100%;padding:10px 12px;margin:3px 0;border-radius:12px;border:1px solid rgba(255,215,0,0.1);background:rgba(15,26,42,0.6);color:#c0d0e8;font-size:clamp(12px,2.5vw,16px);outline:0}
+        .auth-box input::placeholder{color:#3a5a5a}
+        .auth-box .gender-row{display:flex;gap:12px;margin:4px 0 8px 0}
+        .auth-box .gender-btn{flex:1;padding:10px;border-radius:12px;border:1px solid rgba(255,215,0,0.1);background:rgba(15,26,42,0.6);color:#c0d0e8;font-size:clamp(14px,3vw,20px);cursor:pointer;text-align:center}
+        .auth-box .gender-btn.active{border-color:#ffd700;background:rgba(255,215,0,0.05)}
+        .auth-box button{width:100%;padding:12px;margin:6px 0;border-radius:14px;border:none;font-weight:700;font-size:clamp(14px,3vw,18px);cursor:pointer}
+        .auth-btn-register{background:linear-gradient(145deg,#c49a3a,#8a6a2a);color:#1e2a1e}
+        .auth-error{color:#ff6b6b;font-size:clamp(10px,2vw,13px);text-align:center;min-height:16px}
+        .auth-success{color:#6fcf6f;font-size:clamp(10px,2vw,13px);text-align:center;min-height:16px}
+        .auth-toggle{color:#4a6a6a;text-align:center;font-size:clamp(10px,2vw,13px);margin-top:6px;cursor:pointer}
+        .auth-toggle:hover{color:#ffd700}
+        .shop-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.9);z-index:1500;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+        .shop-overlay.active{display:flex}
+        .shop-box{background:linear-gradient(145deg,#1a2a3a,#0f1a2a);padding:25px 20px;border-radius:25px;border:1px solid rgba(255,215,0,0.15);max-width:360px;width:100%;max-height:80vh;overflow-y:auto}
+        .shop-box h2{color:#ffd700;text-align:center;font-size:clamp(18px,4vw,24px);margin-bottom:12px}
+        .shop-item{background:rgba(15,26,42,0.5);border-radius:12px;padding:10px;margin:6px 0;border:1px solid rgba(255,215,0,0.08);display:flex;justify-content:space-between;align-items:center}
+        .shop-item .info{display:flex;flex-direction:column}
+        .shop-item .info .name{color:#c0d0e8;font-size:clamp(12px,2.5vw,16px);font-weight:700}
+        .shop-item .info .desc{color:#6a8a8a;font-size:clamp(8px,1.5vw,11px)}
+        .shop-item .info .owned{color:#6fcf6f;font-size:clamp(8px,1.5vw,11px)}
+        .shop-item .buy-btn{background:#3a8a3a;color:#f0f7d0;border:none;padding:6px 12px;border-radius:10px;font-size:clamp(10px,2vw,14px);font-weight:700;cursor:pointer}
+        .shop-item .buy-btn:active{transform:scale(.95)}
+        .shop-item .buy-btn.disabled{opacity:0.4;pointer-events:none}
+        .shop-close{background:#7a3a3a;color:#f0d0d0;border:none;padding:8px;border-radius:12px;font-size:clamp(12px,2.5vw,16px);font-weight:700;cursor:pointer;margin-top:8px;width:100%}
+        .shop-close:active{transform:scale(.95)}
+    </style>
+</head>
+<body>
+
+    <div class="toast" id="toast">✅ Готово!</div>
+
+    <!-- ===== АВТОРИЗАЦИЯ ===== -->
+    <div class="auth-overlay" id="authOverlay">
+        <div class="auth-box">
+            <h2 id="authTitle">🍎 Три в ряд</h2>
+            <div class="auth-error" id="authError"></div>
+            <div class="auth-success" id="authSuccess"></div>
+            <button class="auth-btn-register" id="authSubmitBtn">🎮 Войти в игру</button>
+            <div class="auth-toggle" id="authToggle" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- ===== МАГАЗИН ===== -->
+    <div class="shop-overlay" id="shopOverlay">
+        <div class="shop-box">
+            <h2>🏪 МАГАЗИН</h2>
+            <div style="color:#c0d0e8;text-align:center;font-size:clamp(12px,2.5vw,16px);margin-bottom:8px;">💰 Монет: <span id="shopMoney">0</span></div>
+            <div id="shopItems"></div>
+            <button class="shop-close" id="shopClose">🚪 Закрыть</button>
+        </div>
+    </div>
+
+    <!-- ===== ИГРА ===== -->
+    <div class="game" id="gameContainer">
+        <div class="header">
+            🍎 ТРИ В РЯД
+            <span class="sub">👤 <span id="userName">Гость</span></span>
+        </div>
+        <div class="stats">
+            <div class="stat-item">🏆 Очки <span id="score">0</span></div>
+            <div class="stat-item">👆 Ходы <span id="moves">0</span></div>
+            <div class="stat-item">🏅 Рекорд <span id="highScore">0</span></div>
+            <div class="stat-item">💰 Монет <span id="moneyDisplay">0</span></div>
+        </div>
+        <div class="grid-wrap">
+            <div class="grid" id="grid"></div>
+            <div class="game-over" id="gameOver">
+                <div class="go-text" id="goText">💀 ПОРАЖЕНИЕ</div>
+                <div class="go-score" id="goScore">Очки: 0</div>
+                <button class="go-btn" id="restartBtn">🔄 Ещё раз</button>
+            </div>
+        </div>
+        <div class="btn-row">
+            <button class="btn gold" id="newGameBtn">🔄 Новая игра</button>
+            <button class="btn blue" id="shuffleBtn">🔀 Перемешать</button>
+            <button class="btn purple" id="shopBtn">🏪 Магазин</button>
+        </div>
+        <div class="footer" id="statusMsg">🍎 Собирай комбинации из 3+ фруктов!</div>
+    </div>
+
+    <script>
+        // ================================================================
+        //  ПОЛНАЯ ИГРА: ТРИ В РЯД + СОХРАНЕНИЕ + МАГАЗИН + БОНУСЫ
+        // ================================================================
+
+        // ---- БАЗА ДАННЫХ ----
+        const STORAGE_KEY = 'match3Users';
+        const CURRENT_USER_KEY = 'match3CurrentUser';
+
+        function getUsers() {
+            try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { return {}; }
+        }
+
+        function saveUsers(u) { localStorage.setItem(STORAGE_KEY, JSON.stringify(u)); }
+
+        function getCurrentUser() {
+            try { return JSON.parse(localStorage.getItem(CURRENT_USER_KEY)); } catch (e) { return null; }
+        }
+
+        function setCurrentUser(u) {
+            if (u) localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(u));
+            else localStorage.removeItem(CURRENT_USER_KEY);
+        }
+
+        function getUserData(username) {
+            const users = getUsers();
+            return users[username] || null;
+        }
+
+        function saveUserData(username, data) {
+            const users = getUsers();
+            users[username] = data;
+            saveUsers(users);
+        }
+
+        // ---- ГЕНЕРАЦИЯ ИМЁН ----
+        const FIRST_NAMES = ['Весёлый','Храбрый','Мудрый','Быстрый','Сильный','Смелый','Добрый','Светлый','Тёмный','Золотой','Серебряный','Огненный','Ледяной','Громовой','Солнечный','Лунный','Звёздный','Космический','Легендарный','Бессмертный'];
+        const SECOND_NAMES = ['Петух','Волк','Лис','Орёл','Сокол','Тигр','Лев','Медведь','Дракон','Феникс','Кит','Дельфин','Акула','Рысь','Барс','Грифон','Единорог','Цербер','Пегас','Химера'];
+        const THIRD_NAMES = ['на закате','в рассвете','в тумане','в грозе','в буре','в ночи','в дне','в тени','в свете','в пламени','в ледяной мгле','в золотой пыли','в серебряном дожде','в звёздном ветре','в лунном сиянии'];
+
+        function generateRandomName() {
+            return FIRST_NAMES[Math.floor(Math.random()*FIRST_NAMES.length)] + ' ' +
+                   SECOND_NAMES[Math.floor(Math.random()*SECOND_NAMES.length)] + ' ' +
+                   THIRD_NAMES[Math.floor(Math.random()*THIRD_NAMES.length)];
+        }
+
+        function generateUniqueName() {
+            const users = getUsers();
+            let name, attempts = 0;
+            do { name = generateRandomName(); attempts++; }
+            while (users[name] && attempts < 100);
+            return name;
+        }
+
+        // ---- АВТО-ВХОД ----
+        function getOrCreateUser() {
+            let user = getCurrentUser();
+            let users = getUsers();
+            if (user && users[user]) return user;
+            let names = Object.keys(users);
+            if (names.length > 0) {
+                let u = names[Math.floor(Math.random()*names.length)];
+                setCurrentUser(u);
+                return u;
+            }
+            let name = generateUniqueName();
+            users[name] = {
+                highScore: 0,
+                money: 0,
+                level: 1,
+                stars: 0,
+                bonuses: { rocket: 0, bomb: 0, rainbow: 0, double: 0 },
+                created: Date.now()
+            };
+            saveUsers(users);
+            setCurrentUser(name);
+            return name;
+        }
+
+        function showAuthScreen() {
+            document.getElementById('authOverlay').classList.add('hidden');
+            let user = getOrCreateUser();
+            document.getElementById('userName').textContent = user;
+            startGame();
+        }
+
+        document.getElementById('authSubmitBtn').addEventListener('click', showAuthScreen);
+
+        // ---- ИГРА ----
+        let grid = [];
+        const SIZE = 8;
+        const EMOJIS = ['🍎','🍐','🍊','🍋','🍇','🍉','🍓','🍑'];
+        let selected = null;
+        let score = 0;
+        let moves = 0;
+        let isProcessing = false;
+        let currentUser = null;
+        let highScore = 0;
+        let money = 0;
+        let userBonuses = { rocket: 0, bomb: 0, rainbow: 0, double: 0 };
+        let bonusOnField = null;
+        let level = 1;
+
+        const BONUS_TYPES = { ROCKET: 'rocket', BOMB: 'bomb', RAINBOW: 'rainbow', DOUBLE: 'double' };
+
+        // ---- ИНИЦИАЛИЗАЦИЯ ----
+        function loadUserData() {
+            let user = getCurrentUser();
+            if (!user) { showAuthScreen(); return; }
+            currentUser = user;
+            let data = getUserData(user);
+            if (data) {
+                highScore = data.highScore || 0;
+                money = data.money || 0;
+                level = data.level || 1;
+                userBonuses = data.bonuses || { rocket: 0, bomb: 0, rainbow: 0, double: 0 };
+            }
+            document.getElementById('highScore').textContent = highScore;
+            document.getElementById('moneyDisplay').textContent = money;
+            document.getElementById('userName').textContent = user;
+        }
+
+        function saveUserDataFull() {
+            if (!currentUser) return;
+            let data = getUserData(currentUser);
+            if (data) {
+                data.highScore = highScore;
+                data.money = money;
+                data.level = level;
+                data.bonuses = userBonuses;
+                saveUserData(currentUser, data);
+            }
+        }
+
+        // ---- УРОВНИ (БЕСКОНЕЧНЫЕ) ----
+        function getLevelConfig(lvl) {
+            let difficulty = Math.floor((lvl - 1) / 10);
+            let base = ((lvl - 1) % 10) + 1;
+            return {
+                size: Math.min(10, 8 + Math.floor(difficulty / 2)),
+                types: Math.min(8, 5 + Math.floor(difficulty / 3)),
+                moves: 20 + difficulty * 3 + base,
+                target: 30 + difficulty * 10 + base * 2,
+                obstacles: Math.min(4 + Math.floor(lvl / 2), 12)
+            };
+        }
+
+        // ---- ПРЕПЯТСТВИЯ (10 ТИПОВ) ----
+        const OBSTACLE_TYPES = [
+            { id: 'ice', emoji: '❄️', name: 'Лёд', layers: 1, color: '#6fcfcf' },
+            { id: 'box', emoji: '📦', name: 'Ящик', layers: 2, color: '#cf8f6f' },
+            { id: 'vine', emoji: '🌿', name: 'Лоза', layers: 3, color: '#6fcf6f' },
+            { id: 'crystal', emoji: '💎', name: 'Кристалл', layers: 1, color: '#6f6fcf' },
+            { id: 'lock', emoji: '🔒', name: 'Замок', layers: 2, color: '#cf6f6f' },
+            { id: 'barrel', emoji: '🛢️', name: 'Бочка', layers: 2, color: '#cf8f6f' },
+            { id: 'web', emoji: '🕸️', name: 'Паутина', layers: 2, color: '#6fcfcf' },
+            { id: 'stone', emoji: '🪨', name: 'Камень', layers: 3, color: '#8a8a8a' },
+            { id: 'chest', emoji: '🧰', name: 'Сундук', layers: 2, color: '#cf8f6f' },
+            { id: 'spike', emoji: '⚔️', name: 'Шип', layers: 1, color: '#cf6f6f' }
+        ];
+
+        let obstacles = [];
+
+        function initObstacles(lvl) {
+            obstacles = [];
+            for (let i = 0; i < SIZE; i++) {
+                obstacles[i] = [];
+                for (let j = 0; j < SIZE; j++) {
+                    obstacles[i][j] = null;
+                }
+            }
+            let config = getLevelConfig(lvl);
+            let count = config.obstacles;
+            let weights = [25, 20, 15, 10, 8, 7, 5, 4, 3, 3];
+            for (let i = 0; i < count; i++) {
+                let typeIdx = 0;
+                let rand = Math.random() * 100;
+                let cum = 0;
+                for (let w = 0; w < weights.length; w++) {
+                    cum += weights[w];
+                    if (rand <= cum) { typeIdx = w; break; }
+                }
+                let type = OBSTACLE_TYPES[typeIdx];
+                let row, col, attempts = 0;
+                do {
+                    row = Math.floor(Math.random() * SIZE);
+                    col = Math.floor(Math.random() * SIZE);
+                    attempts++;
+                } while ((obstacles[row][col] || typeof grid[row][col] !== 'number') && attempts < 100);
+                if (attempts < 100) {
+                    obstacles[row][col] = { type: type.id, layers: type.layers, emoji: type.emoji };
+                }
+            }
+        }
+
+        function hasObstacle(row, col) {
+            return obstacles[row] && obstacles[row][col] !== null;
+        }
+
+        function getObstacle(row, col) {
+            return obstacles[row]?.[col] || null;
+        }
+
+        function hitObstacle(row, col) {
+            let obs = getObstacle(row, col);
+            if (!obs) return false;
+            obs.layers--;
+            if (obs.layers <= 0) {
+                obstacles[row][col] = null;
+                if (grid[row][col] === -1) {
+                    grid[row][col] = Math.floor(Math.random() * EMOJIS.length);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        // ---- БОНУСЫ НА ПОЛЕ ----
+        function createBonusOnField(type) {
+            let empty = [];
+            for (let i = 0; i < SIZE; i++) {
+                for (let j = 0; j < SIZE; j++) {
+                    if (typeof grid[i][j] === 'number' && !hasObstacle(i, j)) {
+                        empty.push([i, j]);
+                    }
+                }
+            }
+            if (empty.length === 0) return;
+            let [r, c] = empty[Math.floor(Math.random() * empty.length)];
+            grid[r][c] = type;
+            bonusOnField = { row: r, col: c, type: type };
+        }
+
+        function placeStartBonus() {
+            if (userBonuses.b
