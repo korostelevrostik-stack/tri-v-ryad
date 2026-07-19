@@ -1,5 +1,5 @@
 // ================================================================
-//  game.js — ПОЛНАЯ ИГРА ТРИ В РЯД
+//  game.js — ПОЛНАЯ ЛОГИКА ИГРЫ (С КНОПКАМИ, БОНУСАМИ, ПРЕПЯТСТВИЯМИ)
 // ================================================================
 
 let grid = [];
@@ -14,6 +14,7 @@ let highScore = 0;
 let money = 0;
 let userBonuses = { rocket: 0, bomb: 0, rainbow: 0, double: 0 };
 let level = 1;
+let comboCount = 0;
 
 const BONUS_TYPES = { ROCKET: 'rocket', BOMB: 'bomb', RAINBOW: 'rainbow', DOUBLE: 'double' };
 
@@ -59,7 +60,7 @@ function getLevelConfig(lvl) {
     };
 }
 
-// ---- ПРЕПЯТСТВИЯ ----
+// ---- ПРЕПЯТСТВИЯ (10 ТИПОВ) ----
 const OBSTACLE_TYPES = [
     { id: 'ice', emoji: '❄️', name: 'Лёд', layers: 1 },
     { id: 'box', emoji: '📦', name: 'Ящик', layers: 2 },
@@ -230,50 +231,55 @@ function renderGrid() {
 // ---- DRAG & DROP ----
 let dragData = null;
 
-document.getElementById('grid').addEventListener('touchstart', (e) => {
-    let touch = e.touches[0];
-    let el = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (el && el.classList.contains('cell')) {
-        let row = parseInt(el.dataset.row);
-        let col = parseInt(el.dataset.col);
-        if (!isProcessing && typeof grid[row][col] === 'number') {
-            dragData = { startRow: row, startCol: col, currentRow: row, currentCol: col };
-            el.classList.add('dragging');
-        }
-    }
-}, { passive: true });
+document.addEventListener('DOMContentLoaded', function() {
+    const gridEl = document.getElementById('grid');
+    if (!gridEl) return;
 
-document.getElementById('grid').addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    if (!dragData) return;
-    let touch = e.touches[0];
-    let container = document.getElementById('grid');
-    let rect = container.getBoundingClientRect();
-    let cellSize = rect.width / SIZE;
-    let col = Math.floor((touch.clientX - rect.left) / cellSize);
-    let row = Math.floor((touch.clientY - rect.top) / cellSize);
-    if (row >= 0 && row < SIZE && col >= 0 && col < SIZE) {
-        if (row !== dragData.currentRow || col !== dragData.currentCol) {
-            dragData.currentRow = row;
-            dragData.currentCol = col;
+    gridEl.addEventListener('touchstart', (e) => {
+        let touch = e.touches[0];
+        let el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (el && el.classList.contains('cell')) {
+            let row = parseInt(el.dataset.row);
+            let col = parseInt(el.dataset.col);
+            if (!isProcessing && typeof grid[row][col] === 'number') {
+                dragData = { startRow: row, startCol: col, currentRow: row, currentCol: col };
+                el.classList.add('dragging');
+            }
         }
-    }
-}, { passive: false });
+    }, { passive: true });
 
-document.getElementById('grid').addEventListener('touchend', (e) => {
-    if (!dragData) return;
-    let dr = Math.abs(dragData.currentRow - dragData.startRow);
-    let dc = Math.abs(dragData.currentCol - dragData.startCol);
-    if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
-        if (dragData.currentRow >= 0 && dragData.currentRow < SIZE &&
-            dragData.currentCol >= 0 && dragData.currentCol < SIZE) {
-            swapAndCheck(dragData.startRow, dragData.startCol, dragData.currentRow, dragData.currentCol);
+    gridEl.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (!dragData) return;
+        let touch = e.touches[0];
+        let container = document.getElementById('grid');
+        let rect = container.getBoundingClientRect();
+        let cellSize = rect.width / SIZE;
+        let col = Math.floor((touch.clientX - rect.left) / cellSize);
+        let row = Math.floor((touch.clientY - rect.top) / cellSize);
+        if (row >= 0 && row < SIZE && col >= 0 && col < SIZE) {
+            if (row !== dragData.currentRow || col !== dragData.currentCol) {
+                dragData.currentRow = row;
+                dragData.currentCol = col;
+            }
         }
-    }
-    let cell = document.querySelector(`.cell[data-row="${dragData.startRow}"][data-col="${dragData.startCol}"]`);
-    if (cell) cell.classList.remove('dragging');
-    dragData = null;
-}, { passive: true });
+    }, { passive: false });
+
+    gridEl.addEventListener('touchend', () => {
+        if (!dragData) return;
+        let dr = Math.abs(dragData.currentRow - dragData.startRow);
+        let dc = Math.abs(dragData.currentCol - dragData.startCol);
+        if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+            if (dragData.currentRow >= 0 && dragData.currentRow < SIZE &&
+                dragData.currentCol >= 0 && dragData.currentCol < SIZE) {
+                swapAndCheck(dragData.startRow, dragData.startCol, dragData.currentRow, dragData.currentCol);
+            }
+        }
+        let cell = document.querySelector(`.cell[data-row="${dragData.startRow}"][data-col="${dragData.startCol}"]`);
+        if (cell) cell.classList.remove('dragging');
+        dragData = null;
+    }, { passive: true });
+});
 
 // ---- ЛОГИКА ИГРЫ ----
 function onCellClick(row, col) {
@@ -386,6 +392,7 @@ function processMatches() {
         return;
     }
 
+    comboCount++;
     let points = 0;
     let bonusMap = new Map();
     let cellsToRemove = new Set();
@@ -409,6 +416,13 @@ function processMatches() {
         points += size;
     });
 
+    // Комбо бонус
+    if (comboCount > 1) {
+        let bonusPoints = comboCount * 2;
+        points += bonusPoints;
+        showToast(`🔥 Комбо x${comboCount}! +${bonusPoints}`, false);
+    }
+
     score += points;
     document.getElementById('score').textContent = score;
 
@@ -420,11 +434,12 @@ function processMatches() {
 
     let config = getLevelConfig(level);
     if (score >= config.target) {
-        money += 10 + Math.floor(level / 5) * 2;
+        let reward = 10 + Math.floor(level / 5) * 2;
+        money += reward;
         level++;
         document.getElementById('moneyDisplay').textContent = money;
         saveUserDataFull();
-        showToast('🎉 Уровень пройден! +' + (10 + Math.floor((level-1) / 5) * 2) + ' монет!', false);
+        showToast('🎉 Уровень пройден! +' + reward + ' монет!', false);
         setTimeout(() => {
             document.getElementById('gameOver').classList.add('active');
             document.getElementById('goText').textContent = '🏆 ПОБЕДА!';
@@ -501,6 +516,7 @@ function checkGameOver() {
         document.getElementById('restartBtn').textContent = '🔄 Попробовать снова';
         return;
     }
+    // Проверка возможных ходов
     for (let i = 0; i < SIZE; i++) {
         for (let j = 0; j < SIZE; j++) {
             if (typeof grid[i][j] !== 'number') continue;
@@ -572,18 +588,4 @@ function activateBonus(row, col) {
             for (let j = -2; j <= 2; j++) {
                 let nr = row + i, nc = col + j;
                 if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) {
-                    if (typeof grid[nr][nc] === 'number') { grid[nr][nc] = -1; score += 1; }
-                    if (hasObstacle(nr, nc)) hitObstacle(nr, nc);
-                }
-            }
-        }
-        grid[row][col] = -1;
-        document.getElementById('score').textContent = score;
-        afterBonus();
-    } else if (bonus === BONUS_TYPES.RAINBOW) {
-        showToast('🌈 Радуга!', false);
-        let targetType = Math.floor(Math.random() * EMOJIS.length);
-        for (let i = 0; i < SIZE; i++) {
-            for (let j = 0; j < SIZE; j++) {
-                if (grid[i][j] === targetType) {
-                    grid[
+                    if (typeof grid[nr][nc] === 'number') { grid[nr][nc] = -1; score +=
